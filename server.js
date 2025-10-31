@@ -74,29 +74,34 @@ const app = express();
 
 /* ✅ Step 1: Define allowed origins */
 const allowedOrigins = [
-  "http://localhost:5173", // local frontend
-  "https://construction-hazard-frontend.vercel.app", // your deployed frontend
-  "https://construction-hazard-backend.onrender.com", // optional backend self-origin
+  "http://localhost:5173", // Local frontend
+  "https://construction-hazard-frontend.vercel.app", // Deployed frontend
+  "https://construction-hazard-backend.onrender.com", // Backend itself
 ];
 
 /* ✅ Step 2: Configure CORS */
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like Postman) or allowed ones
+    // Allow requests with no origin (like Postman) or whitelisted ones
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.warn(`❌ Blocked by CORS: ${origin}`);
       callback(new Error("CORS not allowed from this origin"));
     }
   },
-  credentials: true, // allow cookies/headers
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 
-/* ✅ Step 3: API Routes */
-app.get("/", (req, res) => res.send("✅ Construction Hazard API is running..."));
+/* ✅ Step 3: Basic API Routes */
+app.get("/", (req, res) =>
+  res.send("✅ Construction Hazard API is running and CORS-enabled!")
+);
 app.use("/api/alerts", alertRoutes);
 app.use("/api/users", authRoutes);
 app.use("/api/sensors", sensorRoutes);
@@ -112,14 +117,17 @@ const io = new Server(server, {
   },
 });
 
-/* ✅ Step 5: Handle Socket.io events */
+/* ✅ Step 5: Handle Socket.io connections */
 io.on("connection", (socket) => {
   console.log("⚡ Frontend connected:", socket.id);
 
   socket.on("get-history", async ({ limit = 50 } = {}) => {
     try {
       const Reading = (await import("./models/SensorData.js")).default;
-      const docs = await Reading.find().sort({ createdAt: -1 }).limit(limit).lean();
+      const docs = await Reading.find()
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
       socket.emit("history", docs.reverse());
     } catch (err) {
       console.error("Error fetching history:", err.message);
@@ -132,7 +140,7 @@ io.on("connection", (socket) => {
   });
 });
 
-/* ✅ Step 6: Start server and DB connection */
+/* ✅ Step 6: Start Server + MongoDB + MQTT */
 (async function start() {
   try {
     await connectDB();

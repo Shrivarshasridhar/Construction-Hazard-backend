@@ -56,7 +56,6 @@
 // })();
 
 // export { io };
-
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -74,19 +73,19 @@ const app = express();
 
 /* ✅ Step 1: Define allowed origins */
 const allowedOrigins = [
-  "http://localhost:5173", // Local frontend
+  "http://localhost:5173", // Local frontend (development)
   "https://construction-hazard-frontend.vercel.app", // Deployed frontend
   "https://construction-hazard-backend.onrender.com", // Backend itself
 ];
 
-/* ✅ Step 2: Configure CORS */
+/* ✅ Step 2: Configure CORS for Express HTTP routes */
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like Postman) or whitelisted ones
+    // Allow requests with no origin (like Postman) or whitelisted origins
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`❌ Blocked by CORS: ${origin}`);
+      console.warn(`❌ Blocked by CORS (HTTP): ${origin}`);
       callback(new Error("CORS not allowed from this origin"));
     }
   },
@@ -95,10 +94,11 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
+// Apply CORS middleware
 app.use(cors(corsOptions));
 app.use(express.json());
 
-/* ✅ Step 3: Basic API Routes */
+/* ✅ Step 3: Define REST API routes */
 app.get("/", (req, res) =>
   res.send("✅ Construction Hazard API is running and CORS-enabled!")
 );
@@ -106,20 +106,27 @@ app.use("/api/alerts", alertRoutes);
 app.use("/api/users", authRoutes);
 app.use("/api/sensors", sensorRoutes);
 
-/* ✅ Step 4: Create HTTP + Socket.io server */
+/* ✅ Step 4: Create HTTP server and attach Socket.io */
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`❌ Socket.io blocked origin: ${origin}`);
+        callback(new Error("Not allowed by Socket.io CORS"));
+      }
+    },
     credentials: true,
+    methods: ["GET", "POST"],
   },
 });
 
 /* ✅ Step 5: Handle Socket.io connections */
 io.on("connection", (socket) => {
-  console.log("⚡ Frontend connected:", socket.id);
+  console.log("⚡ Frontend connected via socket:", socket.id);
 
   socket.on("get-history", async ({ limit = 50 } = {}) => {
     try {
@@ -140,7 +147,7 @@ io.on("connection", (socket) => {
   });
 });
 
-/* ✅ Step 6: Start Server + MongoDB + MQTT */
+/* ✅ Step 6: Connect to MongoDB, start MQTT subscriber, and start server */
 (async function start() {
   try {
     await connectDB();
